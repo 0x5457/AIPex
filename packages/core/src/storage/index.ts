@@ -1,33 +1,32 @@
-export interface Serialize {
-  serialize(): string;
-}
-
-export interface Deserialize<T> {
-  deserialize(data: string): T;
-}
-
-export class JsonSerializable<T> {
-  constructor(public value: T) {}
-
-  serialize(): string {
-    return JSON.stringify(this.value);
-  }
-
-  static deserialize<T>(
-    this: new (value: T) => JsonSerializable<T>,
-    data: string,
-  ): JsonSerializable<T> {
-    return new this(JSON.parse(data));
-  }
-}
-
-export function toJson<T>(v: T): JsonSerializable<T> {
-  return new JsonSerializable(v);
-}
-
-export interface StorageAdapter<T> {
-  save(data: T): Promise<void>;
-  load(id: string): Promise<T | null>;
-  delete(id: string): Promise<void>;
+export interface KeyValueStorage<T> {
+  save(key: string, data: T): Promise<void>;
+  load(key: string): Promise<T | null>;
+  delete(key: string): Promise<void>;
   listAll(): Promise<T[]>;
+  query(predicate: (item: T) => boolean): Promise<T[]>;
+  clear?(): Promise<void>;
+}
+
+export abstract class BaseKeyValueStorage<T> implements KeyValueStorage<T> {
+  abstract save(key: string, data: T): Promise<void>;
+  abstract load(key: string): Promise<T | null>;
+  abstract delete(key: string): Promise<void>;
+  abstract listAll(): Promise<T[]>;
+
+  async query(predicate: (item: T) => boolean): Promise<T[]> {
+    const allItems = await this.listAll();
+    return allItems.filter(predicate);
+  }
+
+  async clear?(): Promise<void> {
+    const allItems = await this.listAll();
+    for (const item of allItems) {
+      const key = this.extractKey(item);
+      if (key) {
+        await this.delete(key);
+      }
+    }
+  }
+
+  protected abstract extractKey(item: T): string | undefined;
 }
